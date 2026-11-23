@@ -17,10 +17,24 @@ android {
         versionName = "0.1.0"
     }
 
+    // Release signing reads its secrets from ~/.gradle/gradle.properties (or -P / env), never the repo.
+    val releaseStore = providers.gradleProperty("WFO_STORE_FILE").orNull
+    signingConfigs {
+        if (releaseStore != null) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = providers.gradleProperty("WFO_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("WFO_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("WFO_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {

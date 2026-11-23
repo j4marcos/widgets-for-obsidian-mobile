@@ -39,6 +39,10 @@ Requires JDK 17+ and the Android SDK (platform 36).
 
 The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
+Release builds (`./gradlew assembleRelease`) are signed when `WFO_STORE_FILE`, `WFO_STORE_PASSWORD`,
+`WFO_KEY_ALIAS` and `WFO_KEY_PASSWORD` are set in `~/.gradle/gradle.properties`. Without them the
+release APK is left unsigned.
+
 ---
 
 Not affiliated with or endorsed by Obsidian.
