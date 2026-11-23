@@ -1,0 +1,138 @@
+filters:
+  and:
+    - file.inFolder("projects/tasks")
+    - type == "Task"
+formulas:
+  prio_rank: if(priority == "high", 1, if(priority == "medium", 2, if(priority == "low", 3, 4)))
+properties:
+  status:
+    displayName: Status
+  project:
+    displayName: Project
+  priority:
+    displayName: Priority
+  owner:
+    displayName: Owner
+  start:
+    displayName: Start
+  due:
+    displayName: Due
+  depends_on:
+    displayName: Depends on
+  formula.prio_rank:
+    displayName: Prio
+views:
+  - type: powerbases-board
+    name: Board
+    order:
+      - title
+      - project
+      - priority
+      - due
+    sort:
+      - property: formula.prio_rank
+        direction: ASC
+      - property: due
+        direction: ASC
+    pbGroup: note.status
+    showEmpty: false
+    cardProps: "3"
+  - type: powerbases-board
+    name: Board por projeto
+    filters:
+      and:
+        - status != "done"
+    order:
+      - title
+      - priority
+      - due
+    sort:
+      - property: formula.prio_rank
+        direction: ASC
+      - property: due
+        direction: ASC
+    pbGroup: note.status
+    pbRows: note.project
+    showEmpty: false
+    cardProps: "2"
+  - type: powerbases-board
+    name: Siryus
+    filters:
+      and:
+        - file.hasLink("siryus")
+    order:
+      - title
+      - priority
+      - due
+    sort:
+      - property: formula.prio_rank
+        direction: ASC
+    pbGroup: note.status
+    pbRows: note.owner
+    showEmpty: false
+    cardProps: "2"
+  - type: powerbases-board
+    name: Prioridade
+    filters:
+      and:
+        - status != "done"
+    order:
+      - title
+      - project
+      - status
+      - due
+    sort:
+      - property: due
+        direction: ASC
+    pbGroup: note.priority
+    cardProps: "3"
+  - type: powerbases-table
+    name: Tabela
+    order:
+      - file.name
+      - title
+      - status
+      - priority
+      - project
+      - owner
+      - start
+      - due
+      - depends_on
+    sort:
+      - property: status
+        direction: ASC
+      - property: formula.prio_rank
+        direction: ASC
+      - property: due
+        direction: ASC
+  - type: powerbases-calendar
+    name: Calendário (due)
+    dateProp: note.due
+    calMode: month
+    weekStart: monday
+  - type: powerbases-chart
+    name: Status
+    chartType: donut
+    groupProp: note.status
+    chartAgg: count
+  - type: powerbases-chart
+    name: Abertas por projeto
+    filters:
+      and:
+        - status != "done"
+    chartType: bar
+    groupProp: note.project
+    chartAgg: count
+    sortValue: true
+  - type: table
+    name: Fallback (sem plugin)
+    order:
+      - file.name
+      - status
+      - priority
+      - project
+      - owner
+      - due
+    sort:
+      - property: status
+        direction: ASC
