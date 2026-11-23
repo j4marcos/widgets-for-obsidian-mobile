@@ -1,0 +1,5 @@
+<resources>
+    <color name="note_text">#FFDADADA</color>
+    <color name="widget_bg">#E6262628</color>
+    <color name="widget_muted">#FF9A9A9A</color>
+</resources>

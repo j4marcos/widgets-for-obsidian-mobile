@@ -83,6 +83,34 @@ class VaultRepository(private val resolver: ContentResolver) {
         stream.use { it.write(text.encodeToByteArray()) }
     }
 
+    /** Resolves a vault-relative path (hidden folders included) to its document id, or null. */
+    fun findDocumentId(treeUri: Uri, path: String): String? {
+        var id = DocumentsContract.getTreeDocumentId(treeUri)
+        for (segment in path.split('/').filter { it.isNotEmpty() }) {
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, id)
+            id = resolver.query(childrenUri, PROJECTION, null, null, null)?.use { c ->
+                var found: String? = null
+                while (found == null && c.moveToNext()) if (c.getString(1) == segment) found = c.getString(0)
+                found
+            } ?: return null
+        }
+        return id
+    }
+
+    /** Creates [name] inside [folder] (which must exist) with [text]. Fails if the name is taken. */
+    fun createFile(treeUri: Uri, folder: String, name: String, text: String): VaultFile {
+        val folderId = findDocumentId(treeUri, folder) ?: error("Pasta não encontrada: $folder")
+        val path = if (folder.isEmpty()) name else "$folder/$name"
+        check(findDocumentId(treeUri, path) == null) { "Já existe: $path" }
+        val parent = DocumentsContract.buildDocumentUriUsingTree(treeUri, folderId)
+        // A generic MIME type keeps the provider from appending its own extension to the name.
+        val created = DocumentsContract.createDocument(resolver, parent, "application/octet-stream", name)
+            ?: error("Não consegui criar $path")
+        val docId = DocumentsContract.getDocumentId(created)
+        writeText(treeUri, docId, text)
+        return stat(treeUri, path, docId) ?: VaultFile(path, docId, System.currentTimeMillis(), text.length.toLong())
+    }
+
     /** Current metadata of one known file, or null if it no longer exists. */
     fun stat(treeUri: Uri, path: String, documentId: String): VaultFile? {
         val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)

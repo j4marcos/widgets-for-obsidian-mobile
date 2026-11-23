@@ -89,11 +89,32 @@ Widgets do Android não aceitam campo de texto, então "editar pelo widget" func
 ## Fases
 
 1. ~~Fundação: projeto Gradle, seleção do vault (SAF), Indexer + Room, tela de configurações~~ ✅
-2. **Widget de tasks (lista agrupada)**: parser de `.base`, avaliador de expressões, QueryEngine,
-   widget Glance, marcar como concluída.
-3. **Popup de nova task** (botão +).
-4. **Widget de nota**: renderização, checkboxes, editor em popup, modo "seguir o Obsidian".
-5. **Formatos extras e polimento**: tabela e cards no widget de tasks, temas, `SizeMode.Responsive`.
+2. ~~Widget de tasks (lista agrupada), parser de `.base`, avaliador, QueryEngine, concluir tarefa~~ ✅
+3. ~~Popup de nova task (botão +), com próximo ID por projeto~~ ✅
+4. ~~Widget de nota: renderização, checkboxes, editor em popup, modo "seguir o Obsidian"~~ ✅
+5. ~~Tabela e cards no widget de tasks, tamanhos responsivos, tema claro/escuro~~ ✅
+
+Tudo testado num emulador Android 15 com o Obsidian 1.15.1 e um vault demo.
+
+## Notas de implementação
+
+- **Widget de tasks** usa Jetpack Glance.
+- **Widget de nota** usa RemoteViews tradicional (`AppWidgetProvider` + `ListView`), não Glance:
+  - Texto formatado (negrito, links, destaques) precisa de `TextView` com spans, que só entra no
+    Glance via `AndroidRemoteViews`.
+  - Itens de `LazyColumn` com `AndroidRemoteViews` perdem os cliques.
+  - Uma `ListView` dentro de `AndroidRemoteViews` é recusada pelo launcher
+    ("setRemoteAdapter can only be used for AppWidgets").
+  - Cliques na lista vão por fill-in intents para `NoteActionActivity`, uma activity invisível.
+- **Grid de cards** do Glance dimensiona cada linha por uma célula só, então os cards têm altura fixa.
+- **Seguir o Obsidian** lê a aba ativa de `.obsidian/workspace-mobile.json`. O arquivo não é
+  observado em tempo real: o widget atualiza no refresh manual e a cada 15 min.
+
+## Ainda não feito
+
+- Imagens embutidas (`![[img.png]]`) aparecem como link, sem a imagem.
+- Fórmulas além de `if()` e comparações simples; views de calendário, gráfico e timeline.
+- Desmarcar uma task no widget de tasks volta para `todo`, não para o status anterior.
 
 ## Riscos
 

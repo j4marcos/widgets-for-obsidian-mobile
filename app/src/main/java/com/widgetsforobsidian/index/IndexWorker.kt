@@ -9,7 +9,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.widgetsforobsidian.WidgetsApp
-import com.widgetsforobsidian.widgets.tasks.TasksWidgetUpdater
+import com.widgetsforobsidian.widgets.WidgetUpdater
 import java.util.concurrent.TimeUnit
 
 class IndexWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -18,7 +18,8 @@ class IndexWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val indexer = (applicationContext as WidgetsApp).container.indexer
         return when (val result = runCatching { indexer.index() }.getOrNull()) {
             is IndexResult.Done -> {
-                if (result.changed + result.removed > 0) TasksWidgetUpdater.refreshAll(applicationContext)
+                // Always refresh: note widgets in "follow Obsidian" mode depend on files the index skips.
+                WidgetUpdater.refreshAll(applicationContext)
                 Result.success()
             }
             IndexResult.NoVault, IndexResult.PermissionLost -> Result.success()

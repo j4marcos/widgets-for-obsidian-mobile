@@ -62,6 +62,16 @@ class Indexer(
         }
     }
 
+    /** Creates a note and indexes it immediately. */
+    suspend fun createNote(folder: String, name: String, text: String): VaultFile = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val config = settings.current().vault ?: error("Nenhum vault configurado")
+            val file = vault.createFile(config.treeUri, folder, name, text)
+            dao.upsert(listOf(toEntity(file) { text }))
+            file
+        }
+    }
+
     suspend fun reset() = mutex.withLock { dao.clear() }
 
     companion object {

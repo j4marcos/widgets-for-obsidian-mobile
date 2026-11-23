@@ -1,3 +1,22 @@
 <resources>
     <style name="Theme.WidgetsForObsidian" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Transparent window for the popups launched from widgets; Compose draws the scrim and card. -->
+    <style name="Theme.WidgetsForObsidian.Popup" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+    <style name="Theme.WidgetsForObsidian.Trampoline" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoDisplay">false</item>
+    </style>
+    <style name="WidgetIconButton">
+        <item name="android:layout_width">34dp</item>
+        <item name="android:layout_height">34dp</item>
+        <item name="android:padding">7dp</item>
+        <item name="android:tint">@color/widget_muted</item>
+    </style>
 </resources>

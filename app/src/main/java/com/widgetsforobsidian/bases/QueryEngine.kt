@@ -58,6 +58,13 @@ object QueryEngine {
         return QueryResult(view, groups, limited.size, warnings.toList())
     }
 
+    /** Rows that pass the base-level filters only (no view filters). */
+    fun matching(base: BaseDefinition, rows: List<NoteRow>, today: LocalDate = LocalDate.now()): List<NoteRow> {
+        val filter = base.filters ?: return rows
+        val ignored = mutableSetOf<String>()
+        return rows.filter { test(filter, Evaluator(it, base.formulas, today), ignored) != false }
+    }
+
     /** Returns null when the expression uses something this engine does not support. */
     private fun test(expr: Expr, ev: Evaluator, warnings: MutableSet<String>): Boolean? = when (expr) {
         is Expr.And -> expr.items.all { test(it, ev, warnings) != false }

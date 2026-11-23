@@ -59,12 +59,13 @@ class TasksWidgetConfigActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 ConfigScreen(
-                    onSave = { base, view ->
+                    onSave = { base, view, layout ->
                         lifecycleScope.launch {
                             val glanceId = GlanceAppWidgetManager(this@TasksWidgetConfigActivity).getGlanceIdBy(appWidgetId)
                             updateAppWidgetState(this@TasksWidgetConfigActivity, glanceId) {
                                 it[TasksWidgetKeys.BASE_PATH] = base.path
                                 it[TasksWidgetKeys.VIEW_INDEX] = view.index
+                                it[TasksWidgetKeys.LAYOUT] = layout
                                 it[TasksWidgetKeys.REFRESH] = System.nanoTime()
                             }
                             TasksWidget().update(this@TasksWidgetConfigActivity, glanceId)
@@ -79,12 +80,13 @@ class TasksWidgetConfigActivity : ComponentActivity() {
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    private fun ConfigScreen(onSave: (NoteEntity, BaseView) -> Unit) {
+    private fun ConfigScreen(onSave: (NoteEntity, BaseView, String) -> Unit) {
         var bases by remember { mutableStateOf<List<NoteEntity>?>(null) }
         var hasVault by remember { mutableStateOf(true) }
         var selected by remember { mutableStateOf<NoteEntity?>(null) }
         var views by remember { mutableStateOf<List<BaseView>>(emptyList()) }
         var error by remember { mutableStateOf<String?>(null) }
+        var chosenView by remember { mutableStateOf<BaseView?>(null) }
         val scope = rememberCoroutineScope()
 
         LaunchedEffect(Unit) {
@@ -92,7 +94,17 @@ class TasksWidgetConfigActivity : ComponentActivity() {
             bases = container.database.notes().bases()
         }
 
-        Scaffold(topBar = { TopAppBar(title = { Text(if (selected == null) "Escolha a base" else "Escolha a view") }) }) { padding ->
+        Scaffold(topBar = { TopAppBar(
+                title = {
+                    Text(
+                        when {
+                            selected == null -> "Escolha a base"
+                            chosenView == null -> "Escolha a view"
+                            else -> "Formato"
+                        },
+                    )
+                },
+            ) }) { padding ->
             Column(Modifier.padding(padding)) {
                 when {
                     !hasVault -> NoVault()
@@ -122,6 +134,22 @@ class TasksWidgetConfigActivity : ComponentActivity() {
                         }
                     }
                     views.isEmpty() -> Text("Esta base não tem views de lista, tabela ou board.", Modifier.padding(16.dp))
+                    chosenView != null -> LazyColumn {
+                        val view = chosenView!!
+                        val layouts = listOf(
+                            "auto" to "Automático (${TaskLayout.resolve(null, view.type).name.lowercase()})",
+                            "list" to "Lista agrupada",
+                            "table" to "Tabela",
+                            "cards" to "Cards",
+                        )
+                        items(layouts, key = { it.first }) { (value, label) ->
+                            ListItem(
+                                headlineContent = { Text(label) },
+                                modifier = Modifier.clickable { onSave(selected!!, view, value) },
+                            )
+                            HorizontalDivider()
+                        }
+                    }
                     else -> LazyColumn {
                         items(views, key = { it.index }) { view ->
                             ListItem(
@@ -129,7 +157,7 @@ class TasksWidgetConfigActivity : ComponentActivity() {
                                 supportingContent = {
                                     Text(listOfNotNull(view.type, view.groupBy?.let { "agrupado por $it" }).joinToString(" · "))
                                 },
-                                modifier = Modifier.clickable { onSave(selected!!, view) },
+                                modifier = Modifier.clickable { chosenView = view },
                             )
                             HorizontalDivider()
                         }

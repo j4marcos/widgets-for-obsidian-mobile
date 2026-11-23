@@ -2,4 +2,6 @@
     <string name="app_name">Obsidian Widgets</string>
     <string name="tasks_widget_name">Tasks (base)</string>
     <string name="tasks_widget_description">Tarefas de uma base do Obsidian, agrupadas como no board.</string>
+    <string name="note_widget_name">Nota</string>
+    <string name="note_widget_description">Uma nota do Obsidian na tela inicial, com checkboxes e edição em janela.</string>
 </resources>

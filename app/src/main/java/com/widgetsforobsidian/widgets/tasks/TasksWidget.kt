@@ -6,7 +6,6 @@ import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.Preferences
@@ -18,19 +17,23 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.GridCells
 import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.LazyVerticalGrid
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
-import androidx.glance.color.ColorProvider
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -48,14 +51,17 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
+import com.widgetsforobsidian.AppContainer
 import com.widgetsforobsidian.R
 import com.widgetsforobsidian.WidgetsApp
+import com.widgetsforobsidian.widgets.WidgetPalette as Palette
 import java.time.LocalDate
 
 object TasksWidgetKeys {
     val BASE_PATH = stringPreferencesKey("base_path")
     val VIEW_INDEX = intPreferencesKey("view_index")
+    /** `auto`, `list`, `table` or `cards`. */
+    val LAYOUT = stringPreferencesKey("layout")
     /** Bumped to force a reload; Glance only recomposes when the widget state changes. */
     val REFRESH = longPreferencesKey("refresh")
 
@@ -68,6 +74,8 @@ sealed interface TasksState {
     data class Error(val message: String) : TasksState
     data class Ready(
         val viewName: String,
+        val layout: TaskLayout,
+        val columns: List<TableColumn>,
         val sections: List<TaskSection>,
         val total: Int,
         val vaultName: String,
@@ -81,6 +89,7 @@ class TasksWidgetReceiver : GlanceAppWidgetReceiver() {
 class TasksWidget : GlanceAppWidget() {
 
     override val stateDefinition = PreferencesGlanceStateDefinition
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = (context.applicationContext as WidgetsApp).container
@@ -88,50 +97,42 @@ class TasksWidget : GlanceAppWidget() {
             val prefs = currentState<Preferences>()
             val basePath = prefs[TasksWidgetKeys.BASE_PATH]
             val viewIndex = prefs[TasksWidgetKeys.VIEW_INDEX] ?: 0
+            val layout = prefs[TasksWidgetKeys.LAYOUT]
             val refresh = prefs[TasksWidgetKeys.REFRESH] ?: 0L
 
-            val state by produceState<TasksState>(TasksState.Loading, basePath, viewIndex, refresh) {
-                value = load(container, basePath, viewIndex)
+            val state by produceState<TasksState>(TasksState.Loading, basePath, viewIndex, layout, refresh) {
+                value = load(container, basePath, viewIndex, layout)
             }
             Content(basePath, state)
         }
     }
 
-    private suspend fun load(container: com.widgetsforobsidian.AppContainer, basePath: String?, viewIndex: Int): TasksState {
+    private suspend fun load(container: AppContainer, basePath: String?, viewIndex: Int, layout: String?): TasksState {
         if (basePath == null) return TasksState.Error("Widget sem base. Remova e adicione de novo.")
         val vault = container.settings.current().vault
             ?: return TasksState.Error("Abra o app e escolha o vault.")
         return try {
-            val (_, result) = container.bases.query(basePath, viewIndex)
+            val (base, result) = container.bases.query(basePath, viewIndex)
             val today = LocalDate.now()
-            TasksState.Ready(result.view.name, TaskFormat.sections(result, today), result.total, vault.name)
+            val columns = TaskFormat.columns(result.view.order, base::displayName)
+            TasksState.Ready(
+                viewName = result.view.name,
+                layout = TaskLayout.resolve(layout, result.view.type),
+                columns = columns,
+                sections = TaskFormat.sections(result, today, columns),
+                total = result.total,
+                vaultName = vault.name,
+            )
         } catch (e: Exception) {
             TasksState.Error(e.message ?: e.toString())
         }
     }
 }
 
-private object Palette {
-    val background = ColorProvider(day = Color(0xF2F7F7F8), night = Color(0xE6262628))
-    val text = ColorProvider(day = Color(0xFF1F1F1F), night = Color(0xFFEDEDED))
-    val muted = ColorProvider(day = Color(0xFF7A7A7A), night = Color(0xFF9A9A9A))
-    val accent = ColorProvider(day = Color(0xFF7C3AED), night = Color(0xFFA78BFA))
-    val overdue = ColorProvider(Color(0xFFE5484D))
-
-    fun priority(priority: String?) = ColorProvider(
-        when (priority) {
-            "high", "urgent" -> Color(0xFFE5484D)
-            "medium" -> Color(0xFFF5A524)
-            "low" -> Color(0xFF3E8EF7)
-            else -> Color(0xFF8A8A8A)
-        },
-    )
-}
-
 private sealed interface Line {
     val id: Long
     data class Header(val label: String, val count: Int) : Line {
-        override val id = ("h:$label").hashCode().toLong()
+        override val id = "h:$label".hashCode().toLong()
     }
     data class Task(val task: TaskUi) : Line {
         override val id = task.path.hashCode().toLong() shl 1
@@ -142,46 +143,56 @@ private sealed interface Line {
 private fun Content(basePath: String?, state: TasksState) {
     Column(
         GlanceModifier.fillMaxSize().background(Palette.background).cornerRadius(20.dp)
-            .padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
+            .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 6.dp),
     ) {
         Header(
-            title = basePath?.let(TaskFormat::baseTitle) ?: "Tasks",
+            basePath = basePath,
             subtitle = (state as? TasksState.Ready)?.let { "${it.viewName} · ${it.total}" },
         )
-        Spacer(GlanceModifier.height(6.dp))
+        Spacer(GlanceModifier.height(4.dp))
         when (state) {
             TasksState.Loading -> Message("Carregando…")
             is TasksState.Error -> Message(state.message)
-            is TasksState.Ready -> TaskList(state)
+            is TasksState.Ready -> when {
+                state.total == 0 -> Message("Nenhuma tarefa nesta view.")
+                state.layout == TaskLayout.TABLE -> TaskTable(state)
+                state.layout == TaskLayout.CARDS -> TaskCards(state)
+                else -> TaskList(state)
+            }
         }
     }
 }
 
 @Composable
-private fun Header(title: String, subtitle: String?) {
+private fun Header(basePath: String?, subtitle: String?) {
+    val context = LocalContext.current
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(GlanceModifier.defaultWeight().clickable(actionRunCallback<CycleViewAction>())) {
             Text(
-                title.uppercase(),
+                (basePath?.let(TaskFormat::baseTitle) ?: "Tasks").uppercase(),
                 style = TextStyle(color = Palette.text, fontSize = 14.sp, fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
             if (subtitle != null) {
-                Text(
-                    "$subtitle  ▾",
-                    style = TextStyle(color = Palette.muted, fontSize = 11.sp),
-                    maxLines = 1,
-                )
+                Text("$subtitle  ▾", style = TextStyle(color = Palette.muted, fontSize = 11.sp), maxLines = 1)
             }
         }
-        Box(GlanceModifier.padding(8.dp).clickable(actionRunCallback<RefreshAction>())) {
-            Image(
-                ImageProvider(R.drawable.ic_refresh),
-                contentDescription = "Atualizar",
-                modifier = GlanceModifier.size(20.dp),
-                colorFilter = ColorFilter.tint(Palette.muted),
-            )
+        if (basePath != null) {
+            IconButton(R.drawable.ic_add, "Nova tarefa", actionStartActivity(NewTaskActivity.intent(context, basePath)))
         }
+        IconButton(R.drawable.ic_refresh, "Atualizar", actionRunCallback<RefreshAction>())
+    }
+}
+
+@Composable
+private fun IconButton(icon: Int, description: String, action: androidx.glance.action.Action) {
+    Box(GlanceModifier.padding(7.dp).clickable(action)) {
+        Image(
+            ImageProvider(icon),
+            contentDescription = description,
+            modifier = GlanceModifier.size(22.dp),
+            colorFilter = ColorFilter.tint(Palette.muted),
+        )
     }
 }
 
@@ -192,9 +203,89 @@ private fun Message(text: String) {
 
 @Composable
 private fun TaskList(state: TasksState.Ready) {
-    if (state.total == 0) {
-        Message("Nenhuma tarefa nesta view.")
-        return
+    val compact = LocalSize.current.height < 160.dp
+    val lines = buildList {
+        state.sections.forEach { section ->
+            section.label?.let { add(Line.Header(it, section.tasks.size)) }
+            section.tasks.forEach { add(Line.Task(it)) }
+        }
+    }
+    LazyColumn(GlanceModifier.fillMaxSize()) {
+        items(lines, itemId = { it.id }) { line ->
+            when (line) {
+                is Line.Header -> SectionHeader(line.label, line.count)
+                is Line.Task -> TaskRow(line.task, state.vaultName, showSubtitle = !compact)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(label: String, count: Int) {
+    Row(GlanceModifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp)) {
+        Text(label.uppercase(), style = TextStyle(color = Palette.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+        Spacer(GlanceModifier.width(6.dp))
+        Text("$count", style = TextStyle(color = Palette.muted, fontSize = 11.sp))
+    }
+}
+
+@Composable
+private fun Checkbox(task: TaskUi, size: Int = 20) {
+    Box(
+        GlanceModifier.padding(end = 8.dp, top = 6.dp, bottom = 6.dp).clickable(
+            actionRunCallback<ToggleDoneAction>(
+                actionParametersOf(TasksWidgetKeys.TASK_PATH to task.path, TasksWidgetKeys.TASK_DONE to task.done),
+            ),
+        ),
+    ) {
+        Image(
+            ImageProvider(if (task.done) R.drawable.ic_task_done else R.drawable.ic_task_open),
+            contentDescription = if (task.done) "Reabrir tarefa" else "Concluir tarefa",
+            modifier = GlanceModifier.size(size.dp),
+            colorFilter = ColorFilter.tint(if (task.done) Palette.muted else Palette.priority(task.priority)),
+        )
+    }
+}
+
+private fun titleStyle(done: Boolean, size: Int = 14) = TextStyle(
+    color = if (done) Palette.muted else Palette.text,
+    fontSize = size.sp,
+    textDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None,
+)
+
+@Composable
+private fun TaskRow(task: TaskUi, vaultName: String, showSubtitle: Boolean) {
+    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(task)
+        Column(GlanceModifier.defaultWeight().clickable(actionStartActivity(openInObsidian(vaultName, task.path)))) {
+            Text(task.title, style = titleStyle(task.done), maxLines = 1)
+            if (showSubtitle) task.subtitle?.let {
+                Text(it, style = TextStyle(color = Palette.muted, fontSize = 11.sp), maxLines = 1)
+            }
+        }
+        task.dueLabel?.let {
+            Text(
+                it,
+                style = TextStyle(color = if (task.overdue) Palette.overdue else Palette.muted, fontSize = 11.sp),
+                modifier = GlanceModifier.padding(horizontal = 6.dp),
+            )
+        }
+    }
+}
+
+/** Title plus as many of the view's columns as fit the widget width. */
+@Composable
+private fun TaskTable(state: TasksState.Ready) {
+    val width = LocalSize.current.width
+    val visible = ((width.value - 170f) / 72f).toInt().coerceIn(1, 4).coerceAtMost(state.columns.size)
+    val columns = state.columns.take(visible)
+    val cellStyle = TextStyle(color = Palette.muted, fontSize = 11.sp)
+
+    Row(GlanceModifier.fillMaxWidth().padding(start = 28.dp, end = 6.dp, bottom = 2.dp)) {
+        Text("Título", style = cellStyle.copy(fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight(), maxLines = 1)
+        columns.forEach {
+            Text(it.label, style = cellStyle.copy(fontWeight = FontWeight.Bold), modifier = GlanceModifier.width(68.dp), maxLines = 1)
+        }
     }
     val lines = buildList {
         state.sections.forEach { section ->
@@ -205,63 +296,55 @@ private fun TaskList(state: TasksState.Ready) {
     LazyColumn(GlanceModifier.fillMaxSize()) {
         items(lines, itemId = { it.id }) { line ->
             when (line) {
-                is Line.Header -> SectionHeader(line)
-                is Line.Task -> TaskRow(line.task, state.vaultName)
+                is Line.Header -> SectionHeader(line.label, line.count)
+                is Line.Task -> Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(line.task, size = 18)
+                    Text(
+                        line.task.title,
+                        style = titleStyle(line.task.done, 13),
+                        maxLines = 1,
+                        modifier = GlanceModifier.defaultWeight()
+                            .clickable(actionStartActivity(openInObsidian(state.vaultName, line.task.path))),
+                    )
+                    line.task.cells.take(visible).forEach {
+                        Text(it, style = cellStyle, maxLines = 1, modifier = GlanceModifier.width(68.dp))
+                    }
+                }
             }
         }
     }
 }
 
-@Composable
-private fun SectionHeader(line: Line.Header) {
-    Row(GlanceModifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp)) {
-        Text(
-            line.label.uppercase(),
-            style = TextStyle(color = Palette.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold),
-            maxLines = 1,
-        )
-        Spacer(GlanceModifier.width(6.dp))
-        Text("${line.count}", style = TextStyle(color = Palette.muted, fontSize = 11.sp))
-    }
-}
+private val CARD_HEIGHT = 104.dp
 
 @Composable
-private fun TaskRow(task: TaskUi, vaultName: String) {
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            GlanceModifier.padding(end = 8.dp, top = 6.dp, bottom = 6.dp).clickable(
-                actionRunCallback<ToggleDoneAction>(
-                    actionParametersOf(TasksWidgetKeys.TASK_PATH to task.path, TasksWidgetKeys.TASK_DONE to task.done),
-                ),
-            ),
-        ) {
-            Image(
-                ImageProvider(if (task.done) R.drawable.ic_task_done else R.drawable.ic_task_open),
-                contentDescription = if (task.done) "Reabrir tarefa" else "Concluir tarefa",
-                modifier = GlanceModifier.size(20.dp),
-                colorFilter = ColorFilter.tint(if (task.done) Palette.muted else Palette.priority(task.priority)),
-            )
-        }
-        Column(GlanceModifier.defaultWeight().clickable(actionStartActivity(openInObsidian(vaultName, task.path)))) {
-            Text(
-                task.title,
-                style = TextStyle(
-                    color = if (task.done) Palette.muted else Palette.text,
-                    fontSize = 14.sp,
-                    textDecoration = if (task.done) TextDecoration.LineThrough else TextDecoration.None,
-                ),
-                maxLines = 1,
-            )
-            task.subtitle?.let {
-                Text(it, style = TextStyle(color = Palette.muted, fontSize = 11.sp), maxLines = 1)
+private fun TaskCards(state: TasksState.Ready) {
+    val columns = if (LocalSize.current.width >= 300.dp) 2 else 1
+    val tasks = state.sections.flatMap { it.tasks }
+    LazyVerticalGrid(GridCells.Fixed(columns), GlanceModifier.fillMaxSize()) {
+        items(tasks, itemId = { it.path.hashCode().toLong() }) { task ->
+            // Fixed height: the grid sizes each row from one cell, so taller cards would be clipped.
+            Box(GlanceModifier.height(CARD_HEIGHT).padding(end = 6.dp, bottom = 6.dp)) {
+                Column(
+                    GlanceModifier.fillMaxSize().background(Palette.card).cornerRadius(12.dp)
+                        .padding(start = 8.dp, end = 8.dp, bottom = 6.dp)
+                        .clickable(actionStartActivity(openInObsidian(state.vaultName, task.path))),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(task, size = 18)
+                        Text(task.group.orEmpty(), style = TextStyle(color = Palette.accent, fontSize = 10.sp), maxLines = 1)
+                    }
+                    Text(task.title, style = titleStyle(task.done, 13), maxLines = 2)
+                    val details = listOfNotNull(task.subtitle, task.dueLabel).joinToString(" · ")
+                    if (details.isNotEmpty()) {
+                        Text(
+                            details,
+                            style = TextStyle(color = if (task.overdue) Palette.overdue else Palette.muted, fontSize = 11.sp),
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
-        }
-        task.dueLabel?.let {
-            Text(
-                it,
-                style = TextStyle(color = if (task.overdue) Palette.overdue else Palette.muted, fontSize = 11.sp),
-                modifier = GlanceModifier.padding(start = 6.dp, end = 6.dp),
-            )
         }
     }
 }

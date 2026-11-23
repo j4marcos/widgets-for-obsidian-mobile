@@ -3,7 +3,6 @@ package com.widgetsforobsidian.widgets.tasks
 import android.content.Context
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
@@ -11,6 +10,7 @@ import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.datastore.preferences.core.Preferences
 import com.widgetsforobsidian.WidgetsApp
 import com.widgetsforobsidian.vault.FrontmatterEditor
+import com.widgetsforobsidian.widgets.WidgetUpdater
 
 private val Context.container get() = (applicationContext as WidgetsApp).container
 
@@ -22,7 +22,7 @@ class ToggleDoneAction : ActionCallback {
         context.container.indexer.editNote(path) {
             FrontmatterEditor.set(it, "status", if (wasDone) "todo" else "done")
         }
-        TasksWidgetUpdater.refreshAll(context)
+        WidgetUpdater.refreshAll(context)
     }
 }
 
@@ -30,7 +30,7 @@ class ToggleDoneAction : ActionCallback {
 class RefreshAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         context.container.indexer.index()
-        TasksWidgetUpdater.refreshAll(context)
+        WidgetUpdater.refreshAll(context)
     }
 }
 
@@ -49,12 +49,3 @@ class CycleViewAction : ActionCallback {
     }
 }
 
-object TasksWidgetUpdater {
-    suspend fun refreshAll(context: Context) {
-        val widget = TasksWidget()
-        GlanceAppWidgetManager(context).getGlanceIds(TasksWidget::class.java).forEach { id ->
-            updateAppWidgetState(context, id) { it[TasksWidgetKeys.REFRESH] = System.nanoTime() }
-            widget.update(context, id)
-        }
-    }
-}

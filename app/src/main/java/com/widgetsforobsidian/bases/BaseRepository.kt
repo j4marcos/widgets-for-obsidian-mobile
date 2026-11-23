@@ -42,6 +42,14 @@ class BaseRepository(
             base to QueryEngine.run(base, viewIndex, entities.map(::toRow))
         }
 
+    /** Notes matching the base-level filters, plus the folder new notes of this base belong in. */
+    suspend fun members(basePath: String): Pair<String, List<NoteRow>> = withContext(Dispatchers.IO) {
+        val base = load(basePath)
+        val folder = QueryEngine.folderHint(base.filters)
+        val entities = if (folder != null) dao.notesInFolder(folder) else dao.allNotes()
+        (folder ?: basePath.substringBeforeLast('/', "")) to QueryEngine.matching(base, entities.map(::toRow))
+    }
+
     companion object {
         fun toRow(e: NoteEntity) = NoteRow(
             path = e.path,
