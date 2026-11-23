@@ -24,27 +24,26 @@ object NoteRenderer {
     private const val MUTED = 0xFF8A8A8A.toInt()
     private const val CODE_BG = 0x33888888
     private const val HIGHLIGHT_BG = 0x66FFD400
-    private const val TAG_BG = 0x228B5CF6
 
     data class Rendered(val text: CharSequence, val sizeSp: Float)
 
     fun headingSize(level: Int) = when (level) { 1 -> 20f; 2 -> 18f; 3 -> 16f; else -> 15f }
 
-    fun render(block: Block): Rendered? = when (block) {
-        is Block.Heading -> Rendered(styled(block.text, bold = true), headingSize(block.level))
-        is Block.Paragraph -> Rendered(styled(block.text), 14f)
+    fun render(block: Block, accent: Int = ACCENT): Rendered? = when (block) {
+        is Block.Heading -> Rendered(styled(block.text, accent, bold = true), headingSize(block.level))
+        is Block.Paragraph -> Rendered(styled(block.text, accent), 14f)
         is Block.ListItem -> Rendered(
             SpannableStringBuilder(" ".repeat(block.level))
                 .append(if (block.marker == "•") "•  " else "${block.marker} ")
-                .append(styled(block.text)),
+                .append(styled(block.text, accent)),
             14f,
         )
-        is Block.Task -> Rendered(styled(block.text), 14f)
-        is Block.Quote -> Rendered(lines(block.lines).also { quote(it, MUTED) }, 14f)
+        is Block.Task -> Rendered(styled(block.text, accent), 14f)
+        is Block.Quote -> Rendered(lines(block.lines, accent).also { quote(it, MUTED) }, 14f)
         is Block.Callout -> {
             val sb = SpannableStringBuilder()
             append(sb, block.title, StyleSpan(Typeface.BOLD), ForegroundColorSpan(calloutColor(block.type)))
-            if (block.lines.isNotEmpty()) sb.append("\n").append(lines(block.lines))
+            if (block.lines.isNotEmpty()) sb.append("\n").append(lines(block.lines, accent))
             Rendered(sb, 14f)
         }
         is Block.Code -> Rendered(SpannableStringBuilder(block.text).also { mono(it) }, 12f)
@@ -65,7 +64,7 @@ object NoteRenderer {
         is Block.Embed -> Rendered(
             SpannableStringBuilder().also {
                 val icon = if (Regex("""\.(png|jpe?g|gif|webp|svg|bmp)$""", RegexOption.IGNORE_CASE).containsMatchIn(block.target)) "🖼" else "📄"
-                append(it, "$icon ${block.target}", ForegroundColorSpan(ACCENT))
+                append(it, "$icon ${block.target}", ForegroundColorSpan(accent))
             },
             13f,
         )
@@ -83,13 +82,13 @@ object NoteRenderer {
         else -> 0xFF086DDD.toInt() // note, info, todo
     }
 
-    private fun lines(lines: List<List<Span>>): SpannableStringBuilder {
+    private fun lines(lines: List<List<Span>>, accent: Int): SpannableStringBuilder {
         val sb = SpannableStringBuilder()
-        lines.forEachIndexed { i, l -> if (i > 0) sb.append("\n"); sb.append(styled(l)) }
+        lines.forEachIndexed { i, l -> if (i > 0) sb.append("\n"); sb.append(styled(l, accent)) }
         return sb
     }
 
-    fun styled(spans: List<Span>, bold: Boolean = false): SpannableStringBuilder {
+    fun styled(spans: List<Span>, accent: Int = ACCENT, bold: Boolean = false): SpannableStringBuilder {
         val sb = SpannableStringBuilder()
         for (span in spans) {
             val what = buildList {
@@ -98,8 +97,8 @@ object NoteRenderer {
                 if (Style.STRIKE in span.styles) add(StrikethroughSpan())
                 if (Style.CODE in span.styles) { add(TypefaceSpan("monospace")); add(BackgroundColorSpan(CODE_BG)) }
                 if (Style.HIGHLIGHT in span.styles) add(BackgroundColorSpan(HIGHLIGHT_BG))
-                if (Style.LINK in span.styles) add(ForegroundColorSpan(ACCENT))
-                if (Style.TAG in span.styles) { add(ForegroundColorSpan(ACCENT)); add(BackgroundColorSpan(TAG_BG)) }
+                if (Style.LINK in span.styles) add(ForegroundColorSpan(accent))
+                if (Style.TAG in span.styles) { add(ForegroundColorSpan(accent)); add(BackgroundColorSpan((accent and 0x00FFFFFF) or 0x22000000)) }
             }
             append(sb, span.text, *what.toTypedArray())
         }

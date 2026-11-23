@@ -35,6 +35,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.widgetsforobsidian.R
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -67,37 +69,37 @@ private fun MainScreen(
         uri?.let(onVaultPicked)
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Obsidian Widgets") }) }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) }) { padding ->
         Column(
             Modifier.padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Section("Vault") {
+            Section(stringResource(R.string.vault)) {
                 when {
-                    state.vaultName == null -> Text("Nenhum vault selecionado.")
+                    state.vaultName == null -> Text(stringResource(R.string.no_vault_selected))
                     state.permissionLost -> Text(
-                        "Acesso ao vault \"${state.vaultName}\" foi perdido. Selecione a pasta de novo.",
+                        stringResource(R.string.permission_lost, state.vaultName),
                         color = MaterialTheme.colorScheme.error,
                     )
                     else -> Text(state.vaultName, style = MaterialTheme.typography.titleMedium)
                 }
                 Button(onClick = { picker.launch(null) }) {
-                    Text(if (state.vaultName == null) "Escolher pasta do vault" else "Trocar vault")
+                    Text(stringResource(if (state.vaultName == null) R.string.pick_vault else R.string.change_vault))
                 }
             }
 
             if (state.vaultName != null) {
-                Section("Índice") {
-                    Text("${state.noteCount} notas · ${state.baseCount} bases")
+                Section(stringResource(R.string.index)) {
+                    Text(stringResource(R.string.notes_bases, state.noteCount, state.baseCount))
                     Text(
                         state.lastIndexedAt?.let {
-                            "Atualizado " + DateUtils.getRelativeTimeSpanString(it).toString().lowercase()
-                        } ?: "Ainda não indexado",
+                            stringResource(R.string.updated_at, DateUtils.getRelativeTimeSpanString(it).toString().lowercase())
+                        } ?: stringResource(R.string.not_indexed),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedButton(onClick = onReindex, enabled = !state.indexing) {
-                            Text("Reindexar agora")
+                            Text(stringResource(R.string.rescan))
                         }
                         if (state.indexing) {
                             Spacer(Modifier.width(12.dp))

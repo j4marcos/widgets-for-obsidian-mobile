@@ -37,19 +37,22 @@ enum class TaskLayout { LIST, TABLE, CARDS;
     }
 }
 
-data class TaskSection(val label: String?, val tasks: List<TaskUi>)
+data class TaskSection(val label: String?, val tasks: List<TaskUi>) {
+    /** Stable id used to remember whether the section is collapsed. */
+    val key: String get() = label ?: ""
+}
+
+/** How the widget splits tasks into sections. */
+enum class Grouping {
+    /** One section per `project`, tasks without one under [TaskLabels.inbox]. */
+    PROJECT,
+    /** The view's own grouping (`pbGroup` / `pbRows` / `groupBy`). */
+    VIEW,
+}
 
 /** Pure formatting rules for task notes (`title`, `status`, `priority`, `project`, `due`). */
 object TaskFormat {
 
-    private val STATUS_LABELS = mapOf(
-        "todo" to "A fazer",
-        "doing" to "Fazendo",
-        "blocked" to "Bloqueada",
-        "done" to "Concluídas",
-    )
-    private val PRIORITY_LABELS = mapOf("high" to "Alta", "medium" to "Média", "low" to "Baixa")
-    private val SHORT_DATE = DateTimeFormatter.ofPattern("dd/MM")
 
     /** `"SRY-1 — mídia não pode sumir"` → `"mídia não pode sumir"`; falls back to the file name. */
     fun displayTitle(title: Any?, basename: String): String {
@@ -67,12 +70,12 @@ object TaskFormat {
         return if ('|' in inner) inner.substringAfter('|') else inner.substringAfterLast('/').removeSuffix(".md")
     }
 
-    fun groupLabel(value: Any?, propertyId: String?): String {
-        if (Evaluator.isEmpty(value)) return "Sem valor"
+    fun groupLabel(value: Any?, propertyId: String?, labels: TaskLabels = TaskLabels.ENGLISH): String {
+        if (Evaluator.isEmpty(value)) return labels.noValue
         val key = Evaluator.display(value).lowercase()
         return when (propertyId?.substringAfterLast('.')) {
-            "status" -> STATUS_LABELS[key]
-            "priority" -> PRIORITY_LABELS[key]
+            "status" -> labels.status(key)
+            "priority" -> labels.priority(key)
             else -> null
         } ?: linkLabel(value)
     }
@@ -80,11 +83,11 @@ object TaskFormat {
     fun dueDate(value: Any?): LocalDate? =
         runCatching { LocalDate.parse(Evaluator.display(value).take(10)) }.getOrNull()
 
-    fun dueLabel(due: LocalDate, today: LocalDate): String = when (due) {
-        today -> "hoje"
-        today.plusDays(1) -> "amanhã"
-        today.minusDays(1) -> "ontem"
-        else -> due.format(SHORT_DATE)
+    fun dueLabel(due: LocalDate, today: LocalDate, labels: TaskLabels = TaskLabels.ENGLISH): String = when (due) {
+        today -> labels.today
+        today.plusDays(1) -> labels.tomorrow
+        today.minusDays(1) -> labels.yesterday
+        else -> due.format(DateTimeFormatter.ofPattern(labels.shortDatePattern))
     }
 
     /** Header title for a base: `UFPB/tasks/tasks.base` → `UFPB`, `projects/tasks/tasks.base` → `projects`. */
@@ -99,40 +102,66 @@ object TaskFormat {
         order.filter { it.substringAfterLast('.') !in setOf("title", "name", "basename") }
             .map { TableColumn(it, displayName(it)) }
 
-    fun cell(value: Any?, propertyId: String, today: LocalDate): String {
+    fun cell(value: Any?, propertyId: String, today: LocalDate, labels: TaskLabels = TaskLabels.ENGLISH): String {
         if (Evaluator.isEmpty(value)) return ""
         val key = propertyId.substringAfterLast('.')
-        if (key == "status" || key == "priority") return groupLabel(value, propertyId)
-        dueDate(value)?.takeIf { Evaluator.display(value).length >= 10 }?.let { return dueLabel(it, today) }
+        if (key == "status" || key == "priority") return groupLabel(value, propertyId, labels)
+        dueDate(value)?.takeIf { Evaluator.display(value).length >= 10 }?.let { return dueLabel(it, today, labels) }
         return if (value is List<*>) value.joinToString(", ") { linkLabel(it) } else linkLabel(value)
     }
 
-    fun sections(result: QueryResult, today: LocalDate, columns: List<TableColumn> = emptyList()): List<TaskSection> {
+    fun sections(
+        result: QueryResult,
+        today: LocalDate,
+        columns: List<TableColumn> = emptyList(),
+        grouping: Grouping = Grouping.VIEW,
+        hideDone: Boolean = false,
+        labels: TaskLabels = TaskLabels.ENGLISH,
+    ): List<TaskSection> {
         val view = result.view
-        val grouped = view.groupBy != null || view.rowsBy != null
-        val groupedProps = setOfNotNull(view.groupBy, view.rowsBy).map { it.substringAfterLast('.') }
-        return result.groups.map { group ->
-            val label = if (!grouped) null else listOfNotNull(
-                view.rowsBy?.let { groupLabel(group.row, it) },
-                view.groupBy?.let { groupLabel(group.group, it) },
+        val byProject = grouping == Grouping.PROJECT
+        val grouped = byProject || view.groupBy != null || view.rowsBy != null
+        val groupedProps = if (byProject) listOf("project")
+        else setOfNotNull(view.groupBy, view.rowsBy).map { it.substringAfterLast('.') }
+
+        val viewSections = result.groups.map { group ->
+            val label = if (!grouped || byProject) null else listOfNotNull(
+                view.rowsBy?.let { groupLabel(group.row, it, labels) },
+                view.groupBy?.let { groupLabel(group.group, it, labels) },
             ).joinToString(" · ")
-            val tasks = group.items.map { item ->
+            label to group.items.map { item ->
                 val due = dueDate(item.value("due"))
-                val done = Evaluator.display(item.value("status")).equals("done", ignoreCase = true)
+                val status = Evaluator.display(item.value("status")).lowercase()
+                val done = status == "done"
+                val project = linkLabel(item.value("project")).ifEmpty { null }
                 TaskUi(
                     path = item.row.path,
                     title = displayTitle(item.value("title"), item.row.basename),
-                    subtitle = if ("project" in groupedProps) null
-                    else linkLabel(item.value("project")).ifEmpty { null },
-                    dueLabel = due?.let { dueLabel(it, today) },
+                    subtitle = when {
+                        "project" !in groupedProps -> listOfNotNull(project, labels.statusBadge(status)).joinToString(" · ")
+                        else -> labels.statusBadge(status)
+                    }?.ifEmpty { null },
+                    dueLabel = due?.let { dueLabel(it, today, labels) },
                     overdue = !done && due != null && due < today,
                     priority = Evaluator.display(item.value("priority")).lowercase().ifEmpty { null },
                     done = done,
-                    cells = columns.map { cell(item.value(it.id), it.id, today) },
-                    group = label,
+                    cells = columns.map { cell(item.value(it.id), it.id, today, labels) },
+                    group = if (byProject) project ?: labels.inbox else label,
                 )
             }
-            TaskSection(label, tasks)
         }
+
+        val sections = if (!byProject) {
+            viewSections.map { (label, tasks) -> TaskSection(label, tasks) }
+        } else {
+            // Keep the view's sort inside each project; inbox first, then projects A–Z.
+            viewSections.flatMap { it.second }
+                .groupBy { it.group ?: labels.inbox }
+                .toSortedMap(compareBy<String> { it != labels.inbox }.thenBy { it.lowercase() })
+                .map { (label, tasks) -> TaskSection(label, tasks) }
+        }
+        return sections
+            .map { if (hideDone) it.copy(tasks = it.tasks.filterNot(TaskUi::done)) else it }
+            .filter { it.tasks.isNotEmpty() || it.label == null }
     }
 }

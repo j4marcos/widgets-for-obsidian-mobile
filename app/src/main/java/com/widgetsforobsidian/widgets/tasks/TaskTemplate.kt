@@ -65,7 +65,7 @@ object TaskTemplate {
     fun derivePrefix(project: String?): String {
         val label = project?.let(TaskFormat::linkLabel).orEmpty()
         val letters = label.filter { it.isLetter() && it.code < 128 }.uppercase()
-        return letters.take(4).ifEmpty { "TASK" }
+        return letters.take(4).ifEmpty { if (project == null) "INBOX" else "TASK" }
     }
 
     /** Tags every existing task of the project shares (besides `task`), so new tasks match them. */

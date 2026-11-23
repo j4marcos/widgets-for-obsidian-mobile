@@ -49,3 +49,15 @@ class CycleViewAction : ActionCallback {
     }
 }
 
+
+/** Collapses or expands one section of the widget; the choice is kept per widget. */
+class ToggleSectionAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val key = parameters[TasksWidgetKeys.SECTION] ?: return
+        updateAppWidgetState(context, glanceId) { prefs ->
+            val current = prefs[TasksWidgetKeys.COLLAPSED].orEmpty()
+            prefs[TasksWidgetKeys.COLLAPSED] = if (key in current) current - key else current + key
+        }
+        TasksWidget().update(context, glanceId)
+    }
+}

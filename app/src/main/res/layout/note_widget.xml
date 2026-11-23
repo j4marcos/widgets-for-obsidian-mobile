@@ -44,22 +44,17 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <ImageView
-            android:id="@+id/btn_edit"
-            style="@style/WidgetIconButton"
-            android:contentDescription="Editar"
-            android:src="@drawable/ic_edit" />
 
         <ImageView
             android:id="@+id/btn_open"
             style="@style/WidgetIconButton"
-            android:contentDescription="Abrir no Obsidian"
+            android:contentDescription="@string/open_in_obsidian"
             android:src="@drawable/ic_open" />
 
         <ImageView
             android:id="@+id/btn_refresh"
             style="@style/WidgetIconButton"
-            android:contentDescription="Atualizar"
+            android:contentDescription="@string/refresh"
             android:src="@drawable/ic_refresh" />
     </LinearLayout>
 

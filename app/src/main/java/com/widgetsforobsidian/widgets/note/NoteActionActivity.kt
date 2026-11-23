@@ -6,11 +6,13 @@ import android.os.Bundle
 import com.widgetsforobsidian.WidgetsApp
 import com.widgetsforobsidian.markdown.MarkdownEdit
 import com.widgetsforobsidian.widgets.WidgetUpdater
+import com.widgetsforobsidian.widgets.tasks.openInObsidian
 import kotlinx.coroutines.launch
 
 /**
  * Invisible trampoline for taps inside the note widget's list (fill-in intents need one
- * PendingIntent template). Toggling a checkbox runs in the background; editing opens the popup.
+ * PendingIntent template). Toggling a checkbox runs in the background; tapping text opens
+ * the note in Obsidian for editing.
  */
 class NoteActionActivity : Activity() {
 
@@ -20,7 +22,7 @@ class NoteActionActivity : Activity() {
         private const val LINE = "line"
         private const val RAW = "raw"
 
-        fun editFillIn(path: String) = Intent().putExtra(ACTION, "edit").putExtra(PATH, path)
+        fun openFillIn(path: String) = Intent().putExtra(ACTION, "open").putExtra(PATH, path)
 
         fun toggleFillIn(path: String, line: Int, raw: String) =
             Intent().putExtra(ACTION, "toggle").putExtra(PATH, path).putExtra(LINE, line).putExtra(RAW, raw)
@@ -39,7 +41,12 @@ class NoteActionActivity : Activity() {
                     WidgetUpdater.refreshAll(applicationContext)
                 }
             }
-            "edit" -> if (path != null) startActivity(NoteEditorActivity.intent(this, path))
+            "open" -> if (path != null) {
+                val container = (application as WidgetsApp).container
+                container.appScope.launch {
+                    container.settings.current().vault?.let { startActivity(openInObsidian(it.name, path)) }
+                }
+            }
         }
         finish()
         @Suppress("DEPRECATION")

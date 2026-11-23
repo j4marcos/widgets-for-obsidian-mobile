@@ -24,13 +24,13 @@ class TaskFormatTest {
 
     @Test
     fun `groups dates and base titles`() {
-        assertEquals("A fazer", TaskFormat.groupLabel("todo", "note.status"))
-        assertEquals("Alta", TaskFormat.groupLabel("high", "note.priority"))
-        assertEquals("Sem valor", TaskFormat.groupLabel(null, "note.status"))
+        assertEquals("To do", TaskFormat.groupLabel("todo", "note.status"))
+        assertEquals("High", TaskFormat.groupLabel("high", "note.priority"))
+        assertEquals("No value", TaskFormat.groupLabel(null, "note.status"))
         val today = LocalDate.of(2026, 11, 22)
-        assertEquals("hoje", TaskFormat.dueLabel(today, today))
-        assertEquals("amanhã", TaskFormat.dueLabel(today.plusDays(1), today))
-        assertEquals("30/11", TaskFormat.dueLabel(LocalDate.of(2026, 11, 30), today))
+        assertEquals("today", TaskFormat.dueLabel(today, today))
+        assertEquals("tomorrow", TaskFormat.dueLabel(today.plusDays(1), today))
+        assertEquals("11/30", TaskFormat.dueLabel(LocalDate.of(2026, 11, 30), today))
         assertEquals("UFPB", TaskFormat.baseTitle("UFPB/tasks/tasks.base"))
         assertEquals("projects", TaskFormat.baseTitle("projects/tasks/tasks.base"))
     }

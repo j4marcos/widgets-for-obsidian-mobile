@@ -15,6 +15,8 @@ import com.widgetsforobsidian.WidgetsApp
 import com.widgetsforobsidian.markdown.Block
 import com.widgetsforobsidian.markdown.Markdown
 import com.widgetsforobsidian.markdown.WorkspaceReader
+import com.widgetsforobsidian.settings.ObsidianTheme
+import com.widgetsforobsidian.widgets.WidgetPalette
 import com.widgetsforobsidian.vault.VaultPaths
 import com.widgetsforobsidian.widgets.tasks.openInObsidian
 import kotlinx.coroutines.launch
@@ -66,17 +68,36 @@ class NoteWidgetProvider : AppWidgetProvider() {
         suspend fun update(context: Context, appWidgetId: Int) {
             val container = (context.applicationContext as WidgetsApp).container
             val config = NoteWidgetStore.get(context, appWidgetId)
-            val state = load(container, config.path, config.follow)
-            AppWidgetManager.getInstance(context).updateAppWidget(appWidgetId, render(context, appWidgetId, config, state))
+            val state = load(context, container, config.path, config.follow)
+            val theme = container.theme.current()
+            AppWidgetManager.getInstance(context).updateAppWidget(appWidgetId, render(context, appWidgetId, config, state, theme))
         }
 
-        private fun render(context: Context, appWidgetId: Int, config: NoteWidgetStore.Config, state: NoteState): RemoteViews {
+        private fun render(
+            context: Context,
+            appWidgetId: Int,
+            config: NoteWidgetStore.Config,
+            state: NoteState,
+            theme: ObsidianTheme,
+        ): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.note_widget)
+            // Fixed light/dark themes override the day/night resources used for "system".
+            val textColor = when (theme.mode) {
+                ObsidianTheme.Mode.LIGHT -> WidgetPalette.LIGHT_TEXT.toInt()
+                ObsidianTheme.Mode.DARK -> WidgetPalette.DARK_TEXT.toInt()
+                ObsidianTheme.Mode.SYSTEM -> null
+            }
+            when (theme.mode) {
+                ObsidianTheme.Mode.LIGHT -> views.setInt(R.id.widget_root, "setBackgroundResource", R.drawable.bg_widget_light)
+                ObsidianTheme.Mode.DARK -> views.setInt(R.id.widget_root, "setBackgroundResource", R.drawable.bg_widget_dark)
+                ObsidianTheme.Mode.SYSTEM -> Unit
+            }
+            textColor?.let { views.setTextColor(R.id.title, it) }
             val ready = state as? NoteState.Ready
-            views.setTextViewText(R.id.title, ready?.path?.let(VaultPaths::basename) ?: "Nota")
+            views.setTextViewText(R.id.title, ready?.path?.let(VaultPaths::basename) ?: context.getString(R.string.note_widget_name))
             views.setTextViewText(
                 R.id.subtitle,
-                (if (config.follow) "Seguindo o Obsidian" else ready?.path?.let(VaultPaths::folder)?.ifEmpty { "/" } ?: "") + "  ▾",
+                (if (config.follow) context.getString(R.string.following_obsidian) else ready?.path?.let(VaultPaths::folder)?.ifEmpty { "/" } ?: "") + "  ▾",
             )
             views.setOnClickPendingIntent(R.id.header_title, activity(context, appWidgetId, 0, NoteWidgetConfigActivity.reconfigure(context, appWidgetId)))
             views.setOnClickPendingIntent(
@@ -88,24 +109,24 @@ class NoteWidgetProvider : AppWidgetProvider() {
                 ),
             )
 
-            val buttons = if (ready != null) View.VISIBLE else View.GONE
-            views.setViewVisibility(R.id.btn_edit, buttons)
-            views.setViewVisibility(R.id.btn_open, buttons)
+            views.setViewVisibility(R.id.btn_open, if (ready != null) View.VISIBLE else View.GONE)
             if (ready != null) {
-                views.setOnClickPendingIntent(R.id.btn_edit, activity(context, appWidgetId, 1, NoteEditorActivity.intent(context, ready.path)))
                 views.setOnClickPendingIntent(R.id.btn_open, activity(context, appWidgetId, 2, openInObsidian(ready.vaultName, ready.path)))
             }
 
             val message = when (state) {
-                NoteState.Loading -> "Carregando…"
+                NoteState.Loading -> context.getString(R.string.loading)
                 is NoteState.Error -> state.message
-                is NoteState.Ready -> if (state.blocks.isEmpty()) "Nota vazia. Toque no lápis para escrever." else null
+                is NoteState.Ready -> if (state.blocks.isEmpty()) context.getString(R.string.note_empty) else null
             }
             views.setTextViewText(R.id.message, message.orEmpty())
             views.setViewVisibility(R.id.message, if (message != null) View.VISIBLE else View.GONE)
             views.setViewVisibility(R.id.note_list, if (message == null) View.VISIBLE else View.GONE)
             if (ready != null && message == null) {
-                NoteList.attach(context, views, appWidgetId, ready.path, ready.blocks, ready.truncated)
+                NoteList.attach(
+                    context, views, appWidgetId, ready.path, ready.blocks, ready.truncated,
+                    NoteList.Colors(textColor, theme.accentOrDefault),
+                )
             }
             return views
         }
@@ -119,13 +140,14 @@ class NoteWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
-        suspend fun load(container: AppContainer, fixedPath: String?, follow: Boolean): NoteState {
-            val vault = container.settings.current().vault ?: return NoteState.Error("Abra o app e escolha o vault.")
+        suspend fun load(context: Context, container: AppContainer, fixedPath: String?, follow: Boolean): NoteState {
+            val vault = container.settings.current().vault
+                ?: return NoteState.Error(context.getString(R.string.open_app_pick_vault))
             return try {
                 val path = (if (follow) currentObsidianNote(container, vault.treeUri) ?: fixedPath else fixedPath)
-                    ?: return NoteState.Error(if (follow) "Nenhuma nota aberta no Obsidian." else "Toque no título para escolher uma nota.")
+                    ?: return NoteState.Error(context.getString(if (follow) R.string.no_note_open else R.string.tap_title_to_pick))
                 val entity = container.database.notes().get(path)
-                    ?: return NoteState.Error("Nota não encontrada: $path")
+                    ?: return NoteState.Error(context.getString(R.string.note_not_found, path))
                 val blocks = Markdown.parseNote(container.vault.readText(vault.treeUri, entity.documentId))
                 NoteState.Ready(path, blocks.take(MAX_BLOCKS), vault.name, blocks.size > MAX_BLOCKS)
             } catch (e: Exception) {

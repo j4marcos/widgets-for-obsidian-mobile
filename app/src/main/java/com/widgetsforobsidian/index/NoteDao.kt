@@ -12,6 +12,9 @@ interface NoteDao {
     @Query("SELECT path, mtime FROM notes")
     suspend fun mtimes(): List<PathMtime>
 
+    @Query("SELECT path, mtime FROM notes WHERE folder = :folder OR folder LIKE :folder || '/%'")
+    suspend fun mtimesInFolder(folder: String): List<PathMtime>
+
     @Upsert
     suspend fun upsert(notes: List<NoteEntity>)
 
@@ -40,6 +43,9 @@ interface NoteDao {
 
     @Query("SELECT * FROM notes WHERE extension = 'md'")
     suspend fun allNotes(): List<NoteEntity>
+
+    @Query("SELECT DISTINCT folder FROM notes WHERE extension = 'md' ORDER BY folder")
+    suspend fun folders(): List<String>
 
     @Query("SELECT * FROM notes WHERE extension = 'base' ORDER BY path")
     suspend fun bases(): List<NoteEntity>

@@ -31,7 +31,7 @@ class TaskTemplateTest {
         assertEquals("SRY-21", TaskTemplate.nextId("[[siryus]]", rows))
         assertEquals("PDI-5", TaskTemplate.nextId("[[projects/projeto-pdi/projeto-pdi]]", rows))
         assertEquals("NOVO-1", TaskTemplate.nextId("[[novo-projeto]]", rows))
-        assertEquals("TASK-1", TaskTemplate.nextId(null, emptyList()))
+        assertEquals("INBOX-1", TaskTemplate.nextId(null, emptyList()))
         assertEquals("SRY-22", TaskTemplate.bump("SRY-21"))
     }
 
@@ -70,8 +70,8 @@ class TaskTemplateTest {
         assertEquals(TaskLayout.CARDS, TaskLayout.resolve(null, "cards"))
         assertEquals(TaskLayout.CARDS, TaskLayout.resolve("cards", "table"))
         val today = LocalDate.of(2026, 11, 22)
-        assertEquals("Alta", TaskFormat.cell("high", "priority", today))
-        assertEquals("amanhã", TaskFormat.cell("2026-11-23", "due", today))
+        assertEquals("High", TaskFormat.cell("high", "priority", today))
+        assertEquals("tomorrow", TaskFormat.cell("2026-11-23", "due", today))
         assertEquals("siryus", TaskFormat.cell("[[projects/siryus/siryus]]", "project", today))
         assertEquals("", TaskFormat.cell(null, "due", today))
         assertEquals(listOf("status", "due"), TaskFormat.columns(listOf("file.name", "title", "status", "due")) { it }.map { it.id })

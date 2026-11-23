@@ -29,6 +29,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.widgetsforobsidian.R
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.widgetsforobsidian.WidgetsApp
@@ -81,22 +83,22 @@ class NoteWidgetConfigActivity : ComponentActivity() {
             notes = container.database.notes().searchNotes(query.trim(), limit = 100)
         }
 
-        Scaffold(topBar = { TopAppBar(title = { Text("Nota do widget") }) }) { padding ->
+        Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.widget_note)) }) }) { padding ->
             Column(Modifier.padding(padding)) {
                 if (!hasVault) {
-                    Text("Nenhum vault configurado. Abra o app e escolha a pasta do vault.", Modifier.padding(16.dp))
+                    Text(stringResource(R.string.no_vault_configured), Modifier.padding(16.dp))
                     return@Column
                 }
                 ListItem(
-                    headlineContent = { Text("Seguir o Obsidian") },
-                    supportingContent = { Text("Mostra a última nota aberta no Obsidian") },
+                    headlineContent = { Text(stringResource(R.string.follow_obsidian)) },
+                    supportingContent = { Text(stringResource(R.string.follow_obsidian_hint)) },
                     modifier = Modifier.clickable(onClick = onFollow),
                 )
                 HorizontalDivider()
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    label = { Text("Buscar nota") },
+                    label = { Text(stringResource(R.string.search_notes)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                 )

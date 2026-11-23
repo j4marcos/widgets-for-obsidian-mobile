@@ -93,6 +93,13 @@ Widgets do Android não aceitam campo de texto, então "editar pelo widget" func
 3. ~~Popup de nova task (botão +), com próximo ID por projeto~~ ✅
 4. ~~Widget de nota: renderização, checkboxes, editor em popup, modo "seguir o Obsidian"~~ ✅
 5. ~~Tabela e cards no widget de tasks, tamanhos responsivos, tema claro/escuro~~ ✅
+6. ~~Melhorias da nota "melhorias pro obsidian"~~ ✅
+   - Popup de criação no estilo do TickTick (prazo, prioridade, destino, voz, ↗ abrir no Obsidian)
+   - Widget "Nova nota" (captura rápida em `/inbox`)
+   - Seções por projeto colapsáveis, esconder concluídas, tema do Obsidian (`appearance.json`)
+   - Widget de nota abre o Obsidian para editar (o editor em popup foi removido)
+   - Sem reindexação manual (ver abaixo)
+   - Guia de sync com Syncthing: [docs/SYNC.md](docs/SYNC.md)
 
 Tudo testado num emulador Android 15 com o Obsidian 1.15.1 e um vault demo.
 
@@ -107,8 +114,15 @@ Tudo testado num emulador Android 15 com o Obsidian 1.15.1 e um vault demo.
     ("setRemoteAdapter can only be used for AppWidgets").
   - Cliques na lista vão por fill-in intents para `NoteActionActivity`, uma activity invisível.
 - **Grid de cards** do Glance dimensiona cada linha por uma célula só, então os cards têm altura fixa.
-- **Seguir o Obsidian** lê a aba ativa de `.obsidian/workspace-mobile.json`. O arquivo não é
-  observado em tempo real: o widget atualiza no refresh manual e a cada 15 min.
+- **Leitura sem reindexar**:
+  - Antes de cada render, o widget de tasks reescaneia (incrementalmente, por mtime) só a pasta
+    da base e a pasta do `file.inFolder(...)` do filtro.
+  - `VaultWatchJob` (JobScheduler com *content URI trigger* no MediaStore) acorda o app quando
+    qualquer arquivo do armazenamento muda, mesmo com o processo morto, e redesenha os widgets
+    (~5 s). É um `JobService` próprio porque o WorkManager, ao recriar o processo, reagenda os
+    jobs e perde o disparo que o acordou.
+  - O MediaStore não indexa pastas ocultas: mudanças só em `.obsidian` (tema, nota aberta no
+    modo "Seguir o Obsidian") aparecem na próxima mudança de nota, no ↻ ou em até 15 min.
 
 ## Ainda não feito
 
@@ -118,9 +132,9 @@ Tudo testado num emulador Android 15 com o Obsidian 1.15.1 e um vault demo.
 
 ## Riscos
 
-- **Conflito de sincronização**: o vault usa `remotely-save`. Edições feitas pelo widget
-  enquanto o Obsidian não está aberto só sincronizam quando o Obsidian rodar de novo;
-  editar a mesma nota no PC ao mesmo tempo pode gerar conflito.
+- **Sincronização**: com o Remotely Save, edições feitas pelo widget só sincronizam quando o
+  Obsidian rodar de novo. Com o Syncthing ([docs/SYNC.md](docs/SYNC.md)) elas sincronizam na hora;
+  editar a mesma nota em dois lugares ao mesmo tempo gera um arquivo `.sync-conflict`.
 - **Power Bases**: as chaves `pb*` são de um plugin de terceiros e podem mudar; o widget
   lê só `pbGroup`, `pbRows` e `order`, e ignora o resto.
 - SAF lento em vaults grandes → indexação incremental por mtime (já feita na fase 1).

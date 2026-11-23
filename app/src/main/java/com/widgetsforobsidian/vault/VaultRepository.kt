@@ -42,11 +42,15 @@ class VaultRepository(private val resolver: ContentResolver) {
         return rootId.substringAfterLast(':').substringAfterLast('/')
     }
 
-    /** Lists every `.md` and `.base` file, skipping hidden folders such as `.obsidian` and `.trash`. */
-    fun listFiles(treeUri: Uri): List<VaultFile> {
+    /**
+     * Lists every `.md` and `.base` file under [folder] (the whole vault by default), skipping
+     * hidden folders such as `.obsidian` and `.trash`. Returns null if [folder] does not exist.
+     */
+    fun listFiles(treeUri: Uri, folder: String = ""): List<VaultFile>? {
         val result = mutableListOf<VaultFile>()
         val queue = ArrayDeque<Pair<String, String>>() // documentId to relative folder path
-        queue.add(DocumentsContract.getTreeDocumentId(treeUri) to "")
+        val startId = if (folder.isEmpty()) DocumentsContract.getTreeDocumentId(treeUri) else findDocumentId(treeUri, folder)
+        queue.add((startId ?: return null) to folder)
 
         while (queue.isNotEmpty()) {
             val (parentId, parentPath) = queue.removeFirst()
@@ -99,16 +103,32 @@ class VaultRepository(private val resolver: ContentResolver) {
 
     /** Creates [name] inside [folder] (which must exist) with [text]. Fails if the name is taken. */
     fun createFile(treeUri: Uri, folder: String, name: String, text: String): VaultFile {
-        val folderId = findDocumentId(treeUri, folder) ?: error("Pasta não encontrada: $folder")
+        val folderId = findDocumentId(treeUri, folder) ?: createFolders(treeUri, folder)
         val path = if (folder.isEmpty()) name else "$folder/$name"
-        check(findDocumentId(treeUri, path) == null) { "Já existe: $path" }
+        check(findDocumentId(treeUri, path) == null) { "Already exists: $path" }
         val parent = DocumentsContract.buildDocumentUriUsingTree(treeUri, folderId)
         // A generic MIME type keeps the provider from appending its own extension to the name.
         val created = DocumentsContract.createDocument(resolver, parent, "application/octet-stream", name)
-            ?: error("Não consegui criar $path")
+            ?: error("Could not create $path")
         val docId = DocumentsContract.getDocumentId(created)
         writeText(treeUri, docId, text)
         return stat(treeUri, path, docId) ?: VaultFile(path, docId, System.currentTimeMillis(), text.length.toLong())
+    }
+
+    /** Creates [folder] and any missing parents; returns its document id. */
+    private fun createFolders(treeUri: Uri, folder: String): String {
+        var id = DocumentsContract.getTreeDocumentId(treeUri)
+        var path = ""
+        for (segment in folder.split('/').filter { it.isNotEmpty() }) {
+            path = if (path.isEmpty()) segment else "$path/$segment"
+            id = findDocumentId(treeUri, path) ?: DocumentsContract.createDocument(
+                resolver,
+                DocumentsContract.buildDocumentUriUsingTree(treeUri, id),
+                Document.MIME_TYPE_DIR,
+                segment,
+            )?.let(DocumentsContract::getDocumentId) ?: error("Could not create folder $path")
+        }
+        return id
     }
 
     /** Current metadata of one known file, or null if it no longer exists. */

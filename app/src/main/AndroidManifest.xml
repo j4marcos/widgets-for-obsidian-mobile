@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Lets the quick-add card offer voice input when a speech recognizer is installed. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
     <application
         android:name=".WidgetsApp"
         android:allowBackup="true"
@@ -27,13 +34,31 @@
             </intent-filter>
         </activity>
 
+
         <activity
-            android:name=".widgets.tasks.NewTaskActivity"
+            android:name=".widgets.tasks.QuickAddActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:theme="@style/Theme.WidgetsForObsidian.Popup"
             android:windowSoftInputMode="adjustResize" />
+
+        <service
+            android:name=".index.VaultWatchJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <receiver
+            android:name=".widgets.capture.CaptureWidgetReceiver"
+            android:exported="true"
+            android:label="@string/capture_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/capture_widget_info" />
+        </receiver>
 
         <receiver
             android:name=".widgets.tasks.TasksWidgetReceiver"
@@ -56,13 +81,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".widgets.note.NoteEditorActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:taskAffinity=""
-            android:theme="@style/Theme.WidgetsForObsidian.Popup"
-            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".widgets.note.NoteActionActivity"
