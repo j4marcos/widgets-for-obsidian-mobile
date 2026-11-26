@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import android.widget.Toast
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -71,7 +75,7 @@ private fun MainScreen(
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) }) { padding ->
         Column(
-            Modifier.padding(padding).padding(16.dp),
+            Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Section(stringResource(R.string.vault)) {
@@ -107,6 +111,33 @@ private fun MainScreen(
                         }
                     }
                 }
+            }
+
+            WidgetsSection()
+        }
+    }
+}
+
+@Composable
+private fun WidgetsSection() {
+    val context = LocalContext.current
+    Section(stringResource(R.string.widgets)) {
+        if (!WidgetPinning.isSupported(context)) {
+            Text(stringResource(R.string.pin_not_supported), style = MaterialTheme.typography.bodySmall)
+            return@Section
+        }
+        WidgetPinning.Kind.entries.forEach { kind ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(kind.title), style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(kind.description), style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = {
+                    if (!WidgetPinning.request(context, kind)) {
+                        Toast.makeText(context, R.string.pin_not_supported, Toast.LENGTH_LONG).show()
+                    }
+                }) { Text(stringResource(R.string.add_widget_short)) }
             }
         }
     }

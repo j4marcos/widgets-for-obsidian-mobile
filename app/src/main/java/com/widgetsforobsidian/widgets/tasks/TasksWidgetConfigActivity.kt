@@ -34,13 +34,17 @@ import androidx.compose.ui.res.stringResource
 import com.widgetsforobsidian.R
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.datastore.preferences.core.Preferences
+import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.lifecycle.lifecycleScope
 import com.widgetsforobsidian.WidgetsApp
 import com.widgetsforobsidian.bases.BaseView
 import com.widgetsforobsidian.index.NoteEntity
 import com.widgetsforobsidian.ui.AppTheme
 import com.widgetsforobsidian.ui.MainActivity
+import com.widgetsforobsidian.ui.WidgetPinning
 import kotlinx.coroutines.launch
 
 /** Shown when a tasks widget is added (or reconfigured): pick a `.base` file and one of its views. */
@@ -57,6 +61,15 @@ class TasksWidgetConfigActivity : ComponentActivity() {
         if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             finish()
             return
+        }
+
+        // Opened by the pin callback, but the launcher already ran the configure step itself.
+        if (intent.getBooleanExtra(WidgetPinning.EXTRA_FROM_PIN, false)) {
+            lifecycleScope.launch {
+                val glanceId = GlanceAppWidgetManager(this@TasksWidgetConfigActivity).getGlanceIdBy(appWidgetId)
+                val prefs = getAppWidgetState<Preferences>(this@TasksWidgetConfigActivity, PreferencesGlanceStateDefinition, glanceId)
+                if (prefs[TasksWidgetKeys.BASE_PATH] != null) finish()
+            }
         }
 
         enableEdgeToEdge()

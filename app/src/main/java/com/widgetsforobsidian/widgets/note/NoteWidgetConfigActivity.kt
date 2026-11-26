@@ -36,6 +36,7 @@ import androidx.lifecycle.lifecycleScope
 import com.widgetsforobsidian.WidgetsApp
 import com.widgetsforobsidian.index.NoteEntity
 import com.widgetsforobsidian.ui.AppTheme
+import com.widgetsforobsidian.ui.WidgetPinning
 import kotlinx.coroutines.launch
 
 /** Picks the note a note widget shows, or "follow Obsidian". Also opened by tapping the widget title. */
@@ -58,6 +59,11 @@ class NoteWidgetConfigActivity : ComponentActivity() {
         val result = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
         setResult(RESULT_CANCELED, result)
         if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return finish()
+        // Opened by the pin callback, but the launcher already ran the configure step itself.
+        if (intent.getBooleanExtra(WidgetPinning.EXTRA_FROM_PIN, false)) {
+            val existing = NoteWidgetStore.get(this, appWidgetId)
+            if (existing.path != null || existing.follow) return finish()
+        }
 
         fun save(path: String?, follow: Boolean) = lifecycleScope.launch {
             val previous = NoteWidgetStore.get(this@NoteWidgetConfigActivity, appWidgetId)

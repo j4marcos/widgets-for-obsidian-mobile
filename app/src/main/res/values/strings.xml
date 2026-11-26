@@ -84,4 +84,7 @@
     <string name="updated_at">Updated %1$s</string>
     <string name="not_indexed">Not indexed yet</string>
     <string name="rescan">Rescan now</string>
+    <string name="widgets">Widgets</string>
+    <string name="add_widget_short">Add</string>
+    <string name="pin_not_supported">Your launcher can\'t add widgets from apps. Long-press the home screen and open Widgets.</string>
 </resources>

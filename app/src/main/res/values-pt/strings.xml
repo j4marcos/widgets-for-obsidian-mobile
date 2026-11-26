@@ -84,4 +84,7 @@
     <string name="updated_at">Atualizado %1$s</string>
     <string name="not_indexed">Ainda não indexado</string>
     <string name="rescan">Reindexar agora</string>
+    <string name="widgets">Widgets</string>
+    <string name="add_widget_short">Adicionar</string>
+    <string name="pin_not_supported">Seu launcher não permite adicionar widgets pelo app. Segure na tela inicial e abra Widgets.</string>
 </resources>
