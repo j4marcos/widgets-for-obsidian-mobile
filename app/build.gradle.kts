@@ -13,8 +13,9 @@ android {
         applicationId = "com.widgetsforobsidian"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI passes these per release; local builds keep the defaults.
+        versionCode = providers.gradleProperty("WFO_VERSION_CODE").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("WFO_VERSION_NAME").orNull ?: "0.1.0"
     }
 
     // Release signing reads its secrets from ~/.gradle/gradle.properties (or -P / env), never the repo.

@@ -43,6 +43,11 @@ Release builds (`./gradlew assembleRelease`) are signed when `WFO_STORE_FILE`, `
 `WFO_KEY_ALIAS` and `WFO_KEY_PASSWORD` are set in `~/.gradle/gradle.properties`. Without them the
 release APK is left unsigned.
 
+Every push to `main` publishes a signed release through GitHub Actions
+([`release.yml`](.github/workflows/release.yml)), tagged `v0.1.<run number>`. It needs these repository
+secrets: `WFO_KEYSTORE_BASE64` (the keystore file, base64-encoded), `WFO_STORE_PASSWORD`, `WFO_KEY_ALIAS`
+and `WFO_KEY_PASSWORD`.
+
 ---
 
 Not affiliated with or endorsed by Obsidian.
